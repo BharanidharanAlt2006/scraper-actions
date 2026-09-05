@@ -168,7 +168,12 @@ def fetch_author(author_id):
                     year = int(bib['pub_year'])
                 
                 cited_by = pub.get('num_citations', 0)
-                link = pub.get('pub_url', None)
+                link = pub.get('pub_url')
+
+                # Fallback: If there is no direct publisher link, link directly 
+                # to the Google Scholar page for this specific paper
+                if not link and pub.get('author_pub_id'):
+                    link = f"https://scholar.google.com/citations?view_op=view_citation&hl=en&citation_for_view={pub['author_pub_id']}"
                 
                 # Extract venue (journal / conference name) from BibTeX fields,
                 # falling back to the first segment of the citation string
