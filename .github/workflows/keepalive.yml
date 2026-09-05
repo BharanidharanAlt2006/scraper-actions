@@ -1,0 +1,42 @@
+name: Keep Workflows Alive
+
+# GitHub disables scheduled workflows if the repo has no commits for 60 days.
+# This workflow runs every 50 days and makes a tiny commit to reset that clock.
+# It is the ONLY thing standing between you and GitHub silently disabling the scraper.
+
+on:
+  schedule:
+    - cron: '0 0 */50 * *'   # Runs every 50 days — safely under the 60-day limit
+  workflow_dispatch:           # Can also be triggered manually
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: write          # Needed to push the keep-alive commit
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Make a keep-alive commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Update the timestamp file — this is the "commit" that resets the clock
+          echo "Last keep-alive: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" > .keepalive
+          git add .keepalive
+
+          # Only commit if there's actually something to commit
+          if git diff --staged --quiet; then
+            echo "Nothing to commit — repo is already active."
+          else
+            git commit -m "chore: keep workflows alive [skip ci]"
+            git push
+            echo "Keep-alive commit pushed successfully."
+          fi

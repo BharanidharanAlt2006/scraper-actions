@@ -1,0 +1,53 @@
+name: DCSE Scholar Matrix Scraper
+
+on:
+  schedule:
+    # Runs every 8 hours — 3 triggers/day × 5 matrix jobs = 15 job-runs/day.
+    # This is safe (well under GitHub's abuse limits vs the old every-4-hours
+    # which was 6 × 5 = 30 job-runs/day).
+    #
+    # The SCRAPE_STALENESS_HOURS setting (44h) in the API controls the
+    # 2-day data-freshness cycle — NOT this cron.  Each run only scrapes
+    # authors that are either stale (>44h old) or failed in a previous run.
+    # Successful authors are skipped automatically.  This way, if some
+    # authors fail in one run they are retried 8 hours later.
+    - cron: '0 */8 * * *'
+  workflow_dispatch:  # Allow manual trigger from the GitHub UI
+
+# Prevent multiple runs from overlapping.
+# If a new scheduled trigger fires while the previous one is still running,
+# the old run is cancelled gracefully before the new one starts.
+concurrency:
+  group: dcse-scraper
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false  # If one chunk fails, let the others continue
+      matrix:
+        chunk: [0, 1, 2, 3, 4]  # 5 parallel virtual machines
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper for chunk ${{ matrix.chunk }}
+        env:
+          AUTHOR_IDS: ${{ secrets.AUTHOR_IDS }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          CHUNK_INDEX: ${{ matrix.chunk }}
+          PYTHONUNBUFFERED: "1"
+        run: python scraper.py
